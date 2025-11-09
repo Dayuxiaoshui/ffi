@@ -566,10 +566,20 @@ module FFI
     # This freezes the module's definitions, so that it can be used in a Ractor.
     # No further methods or variables can be attached and no further enums or typedefs can be created in this module afterwards.
     def freeze
-      instance_variables.each do |name|
-        var = instance_variable_get(name)
-        FFI.make_shareable(var)
+      @ffi_function_procs&.each do |name, func|
+        this = Ractor.make_shareable(func)
+        body = Ractor.shareable_proc(self: nil) do |*args, &block|
+          this.call(*args, &block)
+        end
+        undef_method(name)
+        singleton_class.undef_method(name)
+
+        define_method(name, body)
+        define_singleton_method(name, body)
       end
+
+      FFI.make_shareable(self)
+
       nil
     end
   end
